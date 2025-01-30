@@ -1,0 +1,72 @@
+DROP TABLE IF EXISTS payroll;
+DROP TABLE IF EXISTS shifts;
+DROP TABLE IF EXISTS attendance;
+DROP TABLE IF EXISTS employees;
+GO
+
+CREATE TABLE employees (
+    employee_id INT IDENTITY(1,1) PRIMARY KEY,
+    full_name VARCHAR(255) NOT NULL,
+    classification VARCHAR(50) NOT NULL CHECK (classification IN ('new', 'contract', 'regular', 'managerial')),
+    base_salary DECIMAL(10,2) NOT NULL CHECK (base_salary >= 0),
+    department VARCHAR(50) NOT NULL CHECK (department IN ('office', 'production', 'sales'))
+);
+GO
+
+CREATE TABLE attendance (
+    attendance_id INT IDENTITY(1,1) PRIMARY KEY,
+    employee_id INT NOT NULL,
+    leave_type VARCHAR(50) NOT NULL CHECK (leave_type IN ('vacation', 'sick', 'emergency')),
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    reason TEXT NOT NULL,
+    status VARCHAR(50) DEFAULT 'Pending Approval' CHECK (status IN ('Pending Approval', 'Approved', 'Rejected')),
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE,
+    CONSTRAINT chk_valid_dates CHECK (end_date >= start_date)
+);
+GO
+
+CREATE TABLE shifts (
+    shift_id INT IDENTITY(1,1) PRIMARY KEY,
+    employee_id INT NOT NULL,
+    shift_start DATETIME NOT NULL,
+    shift_end DATETIME NOT NULL,
+    shift_type VARCHAR(50) NOT NULL CHECK (shift_type IN ('regular', 'night', 'overtime')),
+    duration AS DATEDIFF(HOUR, shift_start, shift_end) PERSISTED,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE,
+    CONSTRAINT chk_shift_time CHECK (shift_end > shift_start)
+);
+GO
+
+CREATE TABLE payroll (
+    payroll_id INT IDENTITY(1,1) PRIMARY KEY,
+    employee_id INT NOT NULL,
+    pay_period VARCHAR(50) NOT NULL CHECK (pay_period IN ('weekly', 'monthly')),
+    regular_pay DECIMAL(10,2) NOT NULL CHECK (regular_pay >= 0),
+    overtime_pay DECIMAL(10,2) NOT NULL CHECK (overtime_pay >= 0),
+    sss_employee DECIMAL(10,2) NOT NULL CHECK (sss_employee >= 0),
+    sss_employer DECIMAL(10,2) NOT NULL CHECK (sss_employer >= 0),
+    philhealth_employee DECIMAL(10,2) NOT NULL CHECK (philhealth_employee >= 0),
+    philhealth_employer DECIMAL(10,2) NOT NULL CHECK (philhealth_employer >= 0),
+    pagibig_employee DECIMAL(10,2) NOT NULL CHECK (pagibig_employee >= 0),
+    pagibig_employer DECIMAL(10,2) NOT NULL CHECK (pagibig_employer >= 0),
+    net_pay DECIMAL(10,2) NOT NULL CHECK (net_pay >= 0),
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
+);
+GO
+
+INSERT INTO employees (full_name, classification, base_salary, department) 
+VALUES ('John Doe', 'regular', 25000.00, 'office');
+GO
+
+INSERT INTO attendance (employee_id, leave_type, start_date, end_date, reason) 
+VALUES (1, 'vacation', '2025-02-01', '2025-02-05', 'Family vacation');
+GO
+
+INSERT INTO shifts (employee_id, shift_start, shift_end, shift_type) 
+VALUES (1, '2025-02-01 07:00:00', '2025-02-01 15:00:00', 'regular');
+GO
+
+INSERT INTO payroll (employee_id, pay_period, regular_pay, overtime_pay, sss_employee, sss_employer, philhealth_employee, philhealth_employer, pagibig_employee, pagibig_employer, net_pay) 
+VALUES (1, 'monthly', 25000.00, 1500.00, 7500.00, 17500.00, 625.00, 625.00, 100.00, 100.00, 17500.00);
+GO
