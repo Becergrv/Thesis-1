@@ -1,81 +1,157 @@
--- Use your existing database
-USE payrollmanagementsystem_db;
+-- Step 1: Create and Use Database
+CREATE DATABASE IF NOT EXISTS jeff;
+USE jeff;
 
--- Check if employees table exists, if not create it
-IF OBJECT_ID('employees', 'U') IS NULL
-BEGIN
-    CREATE TABLE employees (
-        employee_id INT IDENTITY(1,1) PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        classification VARCHAR(100) NOT NULL,
-        base_salary DECIMAL(10, 2) NOT NULL,
-        department VARCHAR(100) NOT NULL,
-        leave_credits_vacation INT DEFAULT 5,
-        leave_credits_sick INT DEFAULT 5,
-        created_at DATETIME DEFAULT GETDATE()
-    );
-END;
+-- Step 2: Create Employees Table
+CREATE TABLE IF NOT EXISTS employees (
+    employee_id INT AUTO_INCREMENT PRIMARY KEY,
+    first_name VARCHAR(50) NOT NULL,
+    middle_name VARCHAR(50),  
+    last_name VARCHAR(50) NOT NULL,
+    birth_date DATE,
+    hire_date DATE NOT NULL,
+    department VARCHAR(100),
+    position VARCHAR(100),
+    email VARCHAR(100) UNIQUE,
+    phone VARCHAR(20) UNIQUE
+);
 
--- Check if leave_requests table exists, if not create it
-IF OBJECT_ID('leave_requests', 'U') IS NULL
-BEGIN
-    CREATE TABLE leave_requests (
-        leave_id INT IDENTITY(1,1) PRIMARY KEY,
-        employee_id INT NOT NULL,
-        leave_type VARCHAR(100) NOT NULL,
-        start_date DATE NOT NULL,
-        end_date DATE NOT NULL,
-        reason TEXT NOT NULL,
-        status VARCHAR(50) DEFAULT 'Pending Approval',
-        created_at DATETIME DEFAULT GETDATE(),
-        FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
-    );
-END;
+-- Step 3: Create Attendance Table (Biometric Time Logs)
+CREATE TABLE IF NOT EXISTS attendance (
+    attendance_id INT AUTO_INCREMENT PRIMARY KEY,
+    employee_id INT NOT NULL,
+    date DATE NOT NULL,
+    time_in TIME NOT NULL,
+    time_out TIME NOT NULL,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
+);
 
--- Check if shifts table exists, if not create it
-IF OBJECT_ID('shifts', 'U') IS NULL
-BEGIN
-    CREATE TABLE shifts (
-        shift_id INT IDENTITY(1,1) PRIMARY KEY,
-        employee_id INT NOT NULL,
-        shift_start DATETIME NOT NULL,
-        shift_end DATETIME NOT NULL,
-        shift_type VARCHAR(50) NOT NULL,
-        duration DECIMAL(5, 2) NOT NULL,
-        created_at DATETIME DEFAULT GETDATE(),
-        FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
-    );
-END;
+-- Step 4: Create Salary Table
+CREATE TABLE IF NOT EXISTS salary (
+    salary_id INT AUTO_INCREMENT PRIMARY KEY,
+    employee_id INT NOT NULL,
+    base_salary DECIMAL(10,2) NOT NULL,
+    overtime_pay DECIMAL(10,2) DEFAULT 0.00,
+    total_salary DECIMAL(10,2) GENERATED ALWAYS AS (base_salary + overtime_pay) STORED,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
+);
 
--- Check if payroll table exists, if not create it
-IF OBJECT_ID('payroll', 'U') IS NULL
-BEGIN
-    CREATE TABLE payroll (
-        payroll_id INT IDENTITY(1,1) PRIMARY KEY,
-        employee_id INT NOT NULL,
-        pay_period VARCHAR(50) NOT NULL,
-        total_pay DECIMAL(10, 2) NOT NULL,
-        net_pay DECIMAL(10, 2) NOT NULL,
-        overtime_pay DECIMAL(10, 2) NOT NULL,
-        contributions DECIMAL(10, 2) NOT NULL,
-        created_at DATETIME DEFAULT GETDATE(),
-        FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
-    );
-END;
+-- Step 5: Create Deductions Table
+CREATE TABLE IF NOT EXISTS deductions (
+    deduction_id INT AUTO_INCREMENT PRIMARY KEY,
+    employee_id INT NOT NULL,
+    sss DECIMAL(10,2) DEFAULT 0.00,
+    pagibig DECIMAL(10,2) DEFAULT 0.00,
+    philhealth DECIMAL(10,2) DEFAULT 0.00,
+    tax DECIMAL(10,2) DEFAULT 0.00,
+    total_deductions DECIMAL(10,2) GENERATED ALWAYS AS (sss + pagibig + philhealth + tax) STORED,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
+);
 
--- Check if contributions table exists, if not create it
-IF OBJECT_ID('contributions', 'U') IS NULL
+-- Step 6: Create Payslips Table (Without Generated Column)
+CREATE TABLE IF NOT EXISTS payslips (
+    payslip_id INT AUTO_INCREMENT PRIMARY KEY,
+    employee_id INT NOT NULL,
+    salary_id INT NOT NULL,
+    deduction_id INT NOT NULL,
+    net_pay DECIMAL(10,2),  
+    pay_date DATE NOT NULL,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE,
+    FOREIGN KEY (salary_id) REFERENCES salary(salary_id) ON DELETE CASCADE,
+    FOREIGN KEY (deduction_id) REFERENCES deductions(deduction_id) ON DELETE CASCADE
+);
+
+-- Step 7: Create Trigger to Calculate Net Pay Before Insert
+DELIMITER //
+CREATE TRIGGER before_insert_payslip
+BEFORE INSERT ON payslips
+FOR EACH ROW
 BEGIN
-    CREATE TABLE contributions (
-        contribution_id INT IDENTITY(1,1) PRIMARY KEY,
-        employee_id INT NOT NULL,
-        sss_employee DECIMAL(10, 2) NOT NULL,
-        sss_employer DECIMAL(10, 2) NOT NULL,
-        philhealth_employee DECIMAL(10, 2) NOT NULL,
-        philhealth_employer DECIMAL(10, 2) NOT NULL,
-        pagibig_employee DECIMAL(10, 2) NOT NULL,
-        pagibig_employer DECIMAL(10, 2) NOT NULL,
-        created_at DATETIME DEFAULT GETDATE(),
-        FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
-    );
+    DECLARE total_salary DECIMAL(10,2);
+    DECLARE total_deductions DECIMAL(10,2);
+
+    -- Fetch Total Salary
+    SELECT total_salary INTO total_salary 
+    FROM salary 
+    WHERE salary.salary_id = NEW.salary_id;
+
+    -- Fetch Total Deductions
+    SELECT total_deductions INTO total_deductions 
+    FROM deductions 
+    WHERE deductions.deduction_id = NEW.deduction_id;
+
+    -- Compute Net Pay
+    SET NEW.net_pay = total_salary - total_deductions;
 END;
+//
+DELIMITER ;
+
+-- Step 8: Insert Employee Data
+INSERT INTO employees (first_name, middle_name, last_name, birth_date, hire_date, department, position, email, phone) 
+VALUES 
+    ('Juan', 'Cruz', 'Dela Rosa', '1990-05-15', '2020-06-01', 'Accounting', 'Senior Accountant', 'juan.delarosa@email.com', '09123456789'), 
+    ('Maria', 'Reyes', 'Santos', '1988-08-20', '2019-03-15', 'HR', 'HR Manager', 'maria.santos@email.com', '09234567890'), 
+    ('Carlos', 'Lopez', 'Garcia', '1995-11-10', '2022-01-10', 'IT', 'Software Engineer', 'carlos.garcia@email.com', '09345678901');
+
+-- Step 9: Insert Salary Data
+INSERT INTO salary (employee_id, base_salary, overtime_pay) 
+VALUES 
+    (1, 50000.00, 5000.00), 
+    (2, 45000.00, 3000.00), 
+    (3, 60000.00, 7000.00);
+
+-- Step 10: Insert Deductions Data
+INSERT INTO deductions (employee_id, sss, pagibig, philhealth, tax) 
+VALUES 
+    (1, 1500.00, 500.00, 750.00, 5000.00), 
+    (2, 1400.00, 400.00, 700.00, 4500.00), 
+    (3, 1600.00, 600.00, 800.00, 6000.00);
+
+-- Step 11: Insert Payslip Data (Trigger Computes Net Pay)
+INSERT INTO payslips (employee_id, salary_id, deduction_id, pay_date) 
+VALUES 
+    (1, 1, 1, '2024-02-15'), 
+    (2, 2, 2, '2024-02-15'), 
+    (3, 3, 3, '2024-02-15');
+
+-- Step 12: Insert Attendance Data
+INSERT INTO attendance (employee_id, date, time_in, time_out) 
+VALUES 
+    (1, '2024-02-10', '08:00:00', '17:00:00'),
+    (2, '2024-02-10', '09:00:00', '18:00:00'),
+    (3, '2024-02-10', '07:30:00', '16:30:00');
+
+-- Step 13: Retrieve Payroll Data
+SELECT 
+    p.payslip_id, 
+    p.employee_id, 
+    s.total_salary, 
+    d.total_deductions, 
+    p.net_pay, 
+    p.pay_date
+FROM payslips p
+JOIN salary s ON p.salary_id = s.salary_id
+JOIN deductions d ON p.deduction_id = d.deduction_id;
+
+-- Step 14: View All Payroll Data
+SELECT 
+    e.employee_id,
+    CONCAT(e.first_name, ' ', COALESCE(e.middle_name, ''), ' ', e.last_name) AS full_name,
+    e.department,
+    e.position,
+    s.base_salary,
+    s.overtime_pay,
+    s.total_salary,
+    d.sss,
+    d.pagibig,
+    d.philhealth,
+    d.tax,
+    d.total_deductions,
+    p.net_pay,
+    p.pay_date
+FROM payslips p
+JOIN employees e ON p.employee_id = e.employee_id
+JOIN salary s ON p.salary_id = s.salary_id
+JOIN deductions d ON p.deduction_id = d.deduction_id
+ORDER BY p.pay_date DESC;
+
