@@ -1,139 +1,164 @@
-CREATE DATABASE IF NOT EXISTS jeff;
-USE jeff;
+-- Step 1: Create the Database
+CREATE DATABASE payroll_db;
+USE payroll_db;
 
-CREATE TABLE IF NOT EXISTS employees (
+-- Step 2: Create Employees Table (Basic Employee Details)
+CREATE TABLE employees (
     employee_id INT AUTO_INCREMENT PRIMARY KEY,
-    first_name VARCHAR(50) NOT NULL,
-    middle_name VARCHAR(50),  
-    last_name VARCHAR(50) NOT NULL,
-    birth_date DATE,
-    hire_date DATE NOT NULL,
-    department VARCHAR(100),
-    position VARCHAR(100),
-    email VARCHAR(100) UNIQUE,
-    phone VARCHAR(20) UNIQUE
+    name VARCHAR(255) NOT NULL,
+    date_hired DATE NOT NULL,
+    position VARCHAR(100) NOT NULL,
+    status ENUM('Regular', 'Contractual') NOT NULL,
+    basic_salary DECIMAL(10,2) NOT NULL,
+    present_address TEXT,
+    contact_number VARCHAR(50),
+    birthdate DATE NOT NULL,
+    marital_status ENUM('Married', 'Single') NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS attendance (
+-- Step 3: Create Payroll Table (Salary Transactions)
+CREATE TABLE payroll (
+    payroll_id INT AUTO_INCREMENT PRIMARY KEY,
+    employee_id INT NOT NULL,
+    pay_date DATE NOT NULL,
+    basic_salary DECIMAL(10,2) NOT NULL,
+    deductions DECIMAL(10,2) NOT NULL,
+    net_salary DECIMAL(10,2) NOT NULL,
+    payment_status ENUM('Paid', 'Unpaid') DEFAULT 'Unpaid',
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
+);
+
+-- Step 4: Create Attendance Table
+CREATE TABLE attendance (
     attendance_id INT AUTO_INCREMENT PRIMARY KEY,
     employee_id INT NOT NULL,
-    date DATE NOT NULL,
-    time_in TIME NOT NULL,
-    time_out TIME NOT NULL,
+    work_date DATE NOT NULL,
+    clock_in TIME NOT NULL,
+    clock_out TIME NOT NULL,
+    hours_worked DECIMAL(5,2) NOT NULL,
+    status ENUM('Present', 'Absent', 'Late', 'On Leave') NOT NULL,
     FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS salary (
-    salary_id INT AUTO_INCREMENT PRIMARY KEY,
+-- Step 5: Create Overtime Table
+CREATE TABLE overtime (
+    overtime_id INT AUTO_INCREMENT PRIMARY KEY,
     employee_id INT NOT NULL,
-    base_salary DECIMAL(10,2) NOT NULL,
-    overtime_pay DECIMAL(10,2) DEFAULT 0.00,
-    total_salary DECIMAL(10,2) GENERATED ALWAYS AS (base_salary + overtime_pay) STORED,
+    overtime_date DATE NOT NULL,
+    overtime_hours DECIMAL(5,2) NOT NULL,
+    overtime_rate DECIMAL(10,2) NOT NULL,
+    total_overtime_pay DECIMAL(10,2) NOT NULL,
     FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS deductions (
+-- Step 6: Create Deductions Table
+CREATE TABLE deductions (
     deduction_id INT AUTO_INCREMENT PRIMARY KEY,
     employee_id INT NOT NULL,
-    sss DECIMAL(10,2) DEFAULT 0.00,
-    pagibig DECIMAL(10,2) DEFAULT 0.00,
-    philhealth DECIMAL(10,2) DEFAULT 0.00,
-    tax DECIMAL(10,2) DEFAULT 0.00,
-    total_deductions DECIMAL(10,2) GENERATED ALWAYS AS (sss + pagibig + philhealth + tax) STORED,
+    sss DECIMAL(10,2) NOT NULL,
+    philhealth DECIMAL(10,2) NOT NULL,
+    pagibig DECIMAL(10,2) NOT NULL,
+    tax DECIMAL(10,2) NOT NULL,
+    total_deductions DECIMAL(10,2) GENERATED ALWAYS AS (sss + philhealth + pagibig + tax) STORED,
     FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS payslips (
-    payslip_id INT AUTO_INCREMENT PRIMARY KEY,
+-- Step 7: Create Bonuses Table
+CREATE TABLE bonuses (
+    bonus_id INT AUTO_INCREMENT PRIMARY KEY,
     employee_id INT NOT NULL,
-    salary_id INT NOT NULL,
-    deduction_id INT NOT NULL,
-    net_pay DECIMAL(10,2),  
-    pay_date DATE NOT NULL,
-    FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE,
-    FOREIGN KEY (salary_id) REFERENCES salary(salary_id) ON DELETE CASCADE,
-    FOREIGN KEY (deduction_id) REFERENCES deductions(deduction_id) ON DELETE CASCADE
+    bonus_date DATE NOT NULL,
+    bonus_amount DECIMAL(10,2) NOT NULL,
+    bonus_reason VARCHAR(255),
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
 );
 
-DELIMITER //
-CREATE TRIGGER before_insert_payslip
-BEFORE INSERT ON payslips
-FOR EACH ROW
-BEGIN
-    DECLARE total_salary DECIMAL(10,2);
-    DECLARE total_deductions DECIMAL(10,2);
+-- Step 8: Create Payroll Summary Table
+CREATE TABLE payroll_summary (
+    summary_id INT AUTO_INCREMENT PRIMARY KEY,
+    employee_id INT NOT NULL,
+    month_year DATE NOT NULL,
+    total_gross_salary DECIMAL(10,2) NOT NULL,
+    total_overtime DECIMAL(10,2) NOT NULL,
+    total_deductions DECIMAL(10,2) NOT NULL,
+    total_net_salary DECIMAL(10,2) GENERATED ALWAYS AS (total_gross_salary + total_overtime - total_deductions) STORED,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
+);
 
-    SELECT total_salary INTO total_salary 
-    FROM salary 
-    WHERE salary.salary_id = NEW.salary_id;
-
-    SELECT total_deductions INTO total_deductions 
-    FROM deductions 
-    WHERE deductions.deduction_id = NEW.deduction_id;
-
-    SET NEW.net_pay = total_salary - total_deductions;
-END;
-//
-DELIMITER ;
-
-INSERT INTO employees (first_name, middle_name, last_name, birth_date, hire_date, department, position, email, phone) 
+-- Step 9: Insert Sample Data
+INSERT INTO employees (name, date_hired, position, status, basic_salary, present_address, contact_number, birthdate, marital_status)
 VALUES 
-    ('Juan', 'Cruz', 'Dela Rosa', '1990-05-15', '2020-06-01', 'Accounting', 'Senior Accountant', 'juan.delarosa@email.com', '09123456789'), 
-    ('Maria', 'Reyes', 'Santos', '1988-08-20', '2019-03-15', 'HR', 'HR Manager', 'maria.santos@email.com', '09234567890'), 
-    ('Carlos', 'Lopez', 'Garcia', '1995-11-10', '2022-01-10', 'IT', 'Software Engineer', 'carlos.garcia@email.com', '09345678901');
+('John Doe', '2023-01-10', 'Software Engineer', 'Regular', 50000, 'Manila', '09123456789', '1990-03-25', 'Married'),
+('Jane Smith', '2022-07-15', 'HR Manager', 'Regular', 60000, 'Quezon City', '09234567890', '1985-12-10', 'Single'),
+('Mark Lee', '2024-03-01', 'Data Analyst', 'Contractual', 45000, 'Cebu City', '09345678901', '1995-06-20', 'Single');
 
-INSERT INTO salary (employee_id, base_salary, overtime_pay) 
+INSERT INTO payroll (employee_id, pay_date, basic_salary, deductions, net_salary, payment_status)
 VALUES 
-    (1, 50000.00, 5000.00), 
-    (2, 45000.00, 3000.00), 
-    (3, 60000.00, 7000.00);
+(1, '2025-02-28', 50000, 2000, 48000, 'Paid'),
+(2, '2025-02-28', 60000, 2500, 57500, 'Paid'),
+(3, '2025-02-28', 45000, 1500, 43500, 'Paid');
 
-INSERT INTO deductions (employee_id, sss, pagibig, philhealth, tax) 
+INSERT INTO attendance (employee_id, work_date, clock_in, clock_out, hours_worked, status)
 VALUES 
-    (1, 1500.00, 500.00, 750.00, 5000.00), 
-    (2, 1400.00, 400.00, 700.00, 4500.00), 
-    (3, 1600.00, 600.00, 800.00, 6000.00);
+(1, '2025-02-23', '08:00:00', '17:00:00', 8.00, 'Present'),
+(2, '2025-02-23', '09:00:00', '18:00:00', 8.00, 'Present'),
+(3, '2025-02-23', '08:30:00', '17:30:00', 8.00, 'Present');
 
-INSERT INTO payslips (employee_id, salary_id, deduction_id, pay_date) 
+INSERT INTO overtime (employee_id, overtime_date, overtime_hours, overtime_rate, total_overtime_pay)
 VALUES 
-    (1, 1, 1, '2024-02-15'), 
-    (2, 2, 2, '2024-02-15'), 
-    (3, 3, 3, '2024-02-15');
+(1, '2025-02-23', 2, 200, 400),
+(2, '2025-02-23', 3, 250, 750),
+(3, '2025-02-23', 1, 180, 180);
 
-INSERT INTO attendance (employee_id, date, time_in, time_out) 
+INSERT INTO deductions (employee_id, sss, philhealth, pagibig, tax)
 VALUES 
-    (1, '2024-02-10', '08:00:00', '17:00:00'),
-    (2, '2024-02-10', '09:00:00', '18:00:00'),
-    (3, '2024-02-10', '07:30:00', '16:30:00');
+(1, 500, 300, 200, 1000),
+(2, 600, 350, 250, 1300),
+(3, 400, 250, 150, 700);
 
-SELECT 
-    p.payslip_id, 
-    p.employee_id, 
-    s.total_salary, 
-    d.total_deductions, 
-    p.net_pay, 
-    p.pay_date
-FROM payslips p
-JOIN salary s ON p.salary_id = s.salary_id
-JOIN deductions d ON p.deduction_id = d.deduction_id;
+INSERT INTO bonuses (employee_id, bonus_date, bonus_amount, bonus_reason)
+VALUES 
+(1, '2025-02-20', 5000, 'Performance Bonus'),
+(2, '2025-02-20', 7000, 'Annual Bonus'),
+(3, '2025-02-20', 3000, 'Quarterly Bonus');
 
+INSERT INTO payroll_summary (employee_id, month_year, total_gross_salary, total_overtime, total_deductions)
+VALUES 
+(1, '2025-02-01', 50000, 400, 2000),
+(2, '2025-02-01', 60000, 750, 2500),
+(3, '2025-02-01', 45000, 180, 1500);
+
+-- Step 10: Query to Show All Payroll Data
 SELECT 
     e.employee_id,
-    CONCAT(e.first_name, ' ', COALESCE(e.middle_name, ''), ' ', e.last_name) AS full_name,
-    e.department,
+    e.name AS employee_name,
+    e.date_hired,
     e.position,
-    s.base_salary,
-    s.overtime_pay,
-    s.total_salary,
-    d.sss,
-    d.pagibig,
-    d.philhealth,
-    d.tax,
-    d.total_deductions,
-    p.net_pay,
-    p.pay_date
-FROM payslips p
-JOIN employees e ON p.employee_id = e.employee_id
-JOIN salary s ON p.salary_id = s.salary_id
-JOIN deductions d ON p.deduction_id = d.deduction_id
-ORDER BY p.pay_date DESC;
+    e.status,
+    e.basic_salary,
+    e.present_address,
+    e.contact_number,
+    e.birthdate,
+    e.marital_status,
+    p.pay_date,
+    p.basic_salary AS payroll_basic_salary,
+    p.deductions AS total_deductions,
+    p.net_salary,
+    p.payment_status,
+    COUNT(a.attendance_id) AS total_working_days,
+    SUM(a.hours_worked) AS total_hours_worked,
+    COALESCE(SUM(o.overtime_hours), 0) AS total_overtime_hours,
+    COALESCE(SUM(o.total_overtime_pay), 0) AS total_overtime_pay,
+    d.sss, d.philhealth, d.pagibig, d.tax, d.total_deductions,
+    COALESCE(SUM(b.bonus_amount), 0) AS total_bonus,
+    ps.month_year, ps.total_gross_salary, ps.total_overtime,
+    ps.total_deductions AS payroll_summary_deductions, ps.total_net_salary
+FROM employees e
+LEFT JOIN payroll p ON e.employee_id = p.employee_id
+LEFT JOIN attendance a ON e.employee_id = a.employee_id
+LEFT JOIN overtime o ON e.employee_id = o.employee_id
+LEFT JOIN deductions d ON e.employee_id = d.employee_id
+LEFT JOIN bonuses b ON e.employee_id = b.employee_id
+LEFT JOIN payroll_summary ps ON e.employee_id = ps.employee_id
+GROUP BY e.employee_id, p.pay_date, ps.month_year
+ORDER BY e.name, p.pay_date DESC;
