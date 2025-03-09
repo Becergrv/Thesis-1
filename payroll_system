@@ -1,0 +1,192 @@
+-- Create database for Payroll System
+CREATE DATABASE IF NOT EXISTS payroll_system;
+USE payroll_system;
+
+-- Department table
+CREATE TABLE departments (
+    department_id INT AUTO_INCREMENT PRIMARY KEY,
+    department_name VARCHAR(100) NOT NULL,
+    location VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Job Positions table
+CREATE TABLE job_positions (
+    position_id INT AUTO_INCREMENT PRIMARY KEY,
+    position_title VARCHAR(100) NOT NULL,
+    min_salary DECIMAL(12, 2),
+    max_salary DECIMAL(12, 2),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Employee table
+CREATE TABLE employees (
+    employee_id INT AUTO_INCREMENT PRIMARY KEY,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    date_of_birth DATE NOT NULL,
+    gender ENUM('Male', 'Female', 'Other') NOT NULL,
+    email VARCHAR(100) UNIQUE,
+    phone_number VARCHAR(20),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Employee Address Table
+CREATE TABLE employee_addresses (
+    address_id INT AUTO_INCREMENT PRIMARY KEY,
+    employee_id INT NOT NULL,
+    address VARCHAR(255),
+    city VARCHAR(50),
+    state VARCHAR(50),
+    zip_code VARCHAR(20),
+    country VARCHAR(50),
+    is_primary BOOLEAN DEFAULT TRUE,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Employment Details Table
+CREATE TABLE employment_details (
+    employment_id INT AUTO_INCREMENT PRIMARY KEY,
+    employee_id INT NOT NULL,
+    department_id INT,
+    position_id INT,
+    report_to INT,
+    hire_date DATE NOT NULL,
+    termination_date DATE,
+    employment_status ENUM('Full-time', 'Part-time', 'Contract', 'Intern', 'Terminated') DEFAULT 'Full-time',
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
+    FOREIGN KEY (department_id) REFERENCES departments(department_id),
+    FOREIGN KEY (position_id) REFERENCES job_positions(position_id),
+    FOREIGN KEY (report_to) REFERENCES employees(employee_id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Department Managers
+CREATE TABLE department_managers (
+    department_id INT NOT NULL,
+    manager_id INT NOT NULL,
+    effective_date DATE NOT NULL,
+    end_date DATE,
+    is_current BOOLEAN DEFAULT TRUE,
+    PRIMARY KEY (department_id, manager_id, effective_date),
+    FOREIGN KEY (department_id) REFERENCES departments(department_id),
+    FOREIGN KEY (manager_id) REFERENCES employees(employee_id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Employee Bank Details
+CREATE TABLE employee_bank_details (
+    bank_detail_id INT AUTO_INCREMENT PRIMARY KEY,
+    employee_id INT NOT NULL,
+    bank_name VARCHAR(100) NOT NULL,
+    account_number VARCHAR(50) NOT NULL,
+    account_type VARCHAR(50),
+    branch_code VARCHAR(50),
+    routing_number VARCHAR(50),
+    is_primary BOOLEAN DEFAULT TRUE,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Salary Structure Table
+CREATE TABLE salary_structures (
+    structure_id INT AUTO_INCREMENT PRIMARY KEY,
+    structure_name VARCHAR(100) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Employee Salary Details
+CREATE TABLE employee_salary (
+    salary_id INT AUTO_INCREMENT PRIMARY KEY,
+    employee_id INT NOT NULL,
+    structure_id INT,
+    basic_salary DECIMAL(12, 2) NOT NULL,
+    hourly_rate DECIMAL(10, 2),
+    effective_date DATE NOT NULL,
+    end_date DATE,
+    is_current BOOLEAN DEFAULT TRUE,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
+    FOREIGN KEY (structure_id) REFERENCES salary_structures(structure_id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Payroll Periods Table
+CREATE TABLE payroll_periods (
+    period_id INT AUTO_INCREMENT PRIMARY KEY,
+    period_name VARCHAR(100) NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    payment_date DATE NOT NULL,
+    status ENUM('Open', 'Processing', 'Closed') DEFAULT 'Open',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Payroll Table
+CREATE TABLE payroll (
+    payroll_id INT AUTO_INCREMENT PRIMARY KEY,
+    employee_id INT NOT NULL,
+    period_id INT NOT NULL,
+    basic_salary DECIMAL(12, 2) NOT NULL,
+    payment_status ENUM('Pending', 'Processed', 'Paid', 'Failed') DEFAULT 'Pending',
+    remarks TEXT,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
+    FOREIGN KEY (period_id) REFERENCES payroll_periods(period_id),
+    UNIQUE KEY unique_employee_period (employee_id, period_id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Payroll Components Table
+CREATE TABLE payroll_components (
+    component_id INT AUTO_INCREMENT PRIMARY KEY,
+    payroll_id INT NOT NULL,
+    component_type ENUM('Earning', 'Deduction', 'Tax') NOT NULL,
+    amount DECIMAL(12, 2) NOT NULL,
+    description VARCHAR(255),
+    FOREIGN KEY (payroll_id) REFERENCES payroll(payroll_id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Payroll Summary Table
+CREATE TABLE payroll_summary (
+    summary_id INT AUTO_INCREMENT PRIMARY KEY,
+    payroll_id INT NOT NULL,
+    total_earnings DECIMAL(12, 2) DEFAULT 0,
+    total_deductions DECIMAL(12, 2) DEFAULT 0,
+    total_tax DECIMAL(12, 2) DEFAULT 0,
+    gross_pay DECIMAL(12, 2) NOT NULL,
+    net_pay DECIMAL(12, 2) NOT NULL,
+    FOREIGN KEY (payroll_id) REFERENCES payroll(payroll_id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Payroll Payments Table
+CREATE TABLE payroll_payments (
+    payment_id INT AUTO_INCREMENT PRIMARY KEY,
+    payroll_id INT NOT NULL,
+    payment_date DATE NOT NULL,
+    method_id INT NOT NULL,
+    bank_detail_id INT,
+    transaction_reference VARCHAR(100),
+    amount DECIMAL(12, 2) NOT NULL,
+    status ENUM('Pending', 'Completed', 'Failed') DEFAULT 'Pending',
+    notes TEXT,
+    FOREIGN KEY (payroll_id) REFERENCES payroll(payroll_id),
+    FOREIGN KEY (bank_detail_id) REFERENCES employee_bank_details(bank_detail_id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
