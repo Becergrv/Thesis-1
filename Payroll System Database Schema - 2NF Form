@@ -1,0 +1,241 @@
+-- Create database for Payroll System
+CREATE DATABASE IF NOT EXISTS PayrollSystem;
+USE PayrollSystem;
+
+-- Employee table - Main personnel information
+CREATE TABLE Employees (
+    EmployeeID INT AUTO_INCREMENT PRIMARY KEY,
+    Name VARCHAR(100) NOT NULL,
+    DateHired DATE NOT NULL,
+    LatestEvaluation DATE,
+    Position VARCHAR(100) NOT NULL,
+    EmploymentStatus ENUM('Regular', 'Contractual') NOT NULL,
+    BasicSalary DECIMAL(12, 2) NOT NULL,
+    OtherCompensation DECIMAL(12, 2),
+    PresentAddress VARCHAR(255) NOT NULL,
+    ProvincialAddress VARCHAR(255),
+    ContactNumber VARCHAR(20),
+    Birthdate DATE NOT NULL,
+    BirthPlace VARCHAR(100) NOT NULL,
+    MaritalStatus ENUM('Married', 'Single', 'Head of Family') NOT NULL,
+    SSS_Number VARCHAR(20) UNIQUE,
+    HDMF_Number VARCHAR(20) UNIQUE,
+    TIN_Number VARCHAR(20) UNIQUE,
+    PhilHealth_Number VARCHAR(20) UNIQUE,
+    CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UpdatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Family information table
+CREATE TABLE FamilyInfo (
+    FamilyInfoID INT AUTO_INCREMENT PRIMARY KEY,
+    EmployeeID INT NOT NULL,
+    SpouseName VARCHAR(100),
+    MotherOccupation VARCHAR(100),
+    FatherOccupation VARCHAR(100),
+    OtherContactPerson VARCHAR(100),
+    OtherContactInfo VARCHAR(255),
+    FOREIGN KEY (EmployeeID) REFERENCES Employees(EmployeeID) ON DELETE CASCADE
+);
+
+-- Dependents table
+CREATE TABLE Dependents (
+    DependentID INT AUTO_INCREMENT PRIMARY KEY,
+    EmployeeID INT NOT NULL,
+    DependentName VARCHAR(100) NOT NULL,
+    Age INT,
+    Relationship VARCHAR(50),
+    FOREIGN KEY (EmployeeID) REFERENCES Employees(EmployeeID) ON DELETE CASCADE
+);
+
+-- Educational background table
+CREATE TABLE Education (
+    EducationID INT AUTO_INCREMENT PRIMARY KEY,
+    EmployeeID INT NOT NULL,
+    EducationLevel ENUM('Elementary', 'HighSchool', 'College', 'Vocational') NOT NULL,
+    Institution VARCHAR(100) NOT NULL,
+    YearCompleted YEAR,
+    FOREIGN KEY (EmployeeID) REFERENCES Employees(EmployeeID) ON DELETE CASCADE
+);
+
+-- Skills table
+CREATE TABLE Skills (
+    SkillID INT AUTO_INCREMENT PRIMARY KEY,
+    EmployeeID INT NOT NULL,
+    SkillDescription VARCHAR(255) NOT NULL,
+    FOREIGN KEY (EmployeeID) REFERENCES Employees(EmployeeID) ON DELETE CASCADE
+);
+
+-- Employment history table
+CREATE TABLE EmploymentHistory (
+    HistoryID INT AUTO_INCREMENT PRIMARY KEY,
+    EmployeeID INT NOT NULL,
+    CompanyName VARCHAR(100) NOT NULL,
+    CompanyAddress VARCHAR(255),
+    CompanyTelephone VARCHAR(20),
+    YearStarted YEAR NOT NULL,
+    YearEnded YEAR,
+    FOREIGN KEY (EmployeeID) REFERENCES Employees(EmployeeID) ON DELETE CASCADE
+);
+
+-- Payroll table
+CREATE TABLE Payroll (
+    PayrollID INT AUTO_INCREMENT PRIMARY KEY,
+    EmployeeID INT NOT NULL,
+    PayPeriodStart DATE NOT NULL,
+    PayPeriodEnd DATE NOT NULL,
+    GrossPay DECIMAL(12, 2) NOT NULL,
+    TotalDeductions DECIMAL(12, 2) NOT NULL,
+    NetPay DECIMAL(12, 2) NOT NULL,
+    PaymentDate DATE NOT NULL,
+    FOREIGN KEY (EmployeeID) REFERENCES Employees(EmployeeID)
+);
+
+-- Deductions table
+CREATE TABLE Deductions (
+    DeductionID INT AUTO_INCREMENT PRIMARY KEY,
+    PayrollID INT NOT NULL,
+    DeductionType ENUM('SSS', 'HDMF', 'PhilHealth', 'Tax', 'Loan', 'Other') NOT NULL,
+    Amount DECIMAL(12, 2) NOT NULL,
+    Description VARCHAR(255),
+    FOREIGN KEY (PayrollID) REFERENCES Payroll(PayrollID) ON DELETE CASCADE
+);
+
+-- Attendance table
+CREATE TABLE Attendance (
+    AttendanceID INT AUTO_INCREMENT PRIMARY KEY,
+    EmployeeID INT NOT NULL,
+    AttendanceDate DATE NOT NULL,
+    TimeIn TIME,
+    TimeOut TIME,
+    Status ENUM('Present', 'Absent', 'Late', 'Half-Day', 'Leave') NOT NULL,
+    FOREIGN KEY (EmployeeID) REFERENCES Employees(EmployeeID),
+    UNIQUE KEY (EmployeeID, AttendanceDate)
+);
+
+-- Leave table
+CREATE TABLE Leaves (
+    LeaveID INT AUTO_INCREMENT PRIMARY KEY,
+    EmployeeID INT NOT NULL,
+    LeaveType ENUM('Vacation', 'Sick', 'Maternity', 'Paternity', 'Emergency', 'Others') NOT NULL,
+    StartDate DATE NOT NULL,
+    EndDate DATE NOT NULL,
+    Status ENUM('Pending', 'Approved', 'Rejected') NOT NULL DEFAULT 'Pending',
+    Reason TEXT,
+    FOREIGN KEY (EmployeeID) REFERENCES Employees(EmployeeID)
+);
+
+-- Overtime table
+CREATE TABLE Overtime (
+    OvertimeID INT AUTO_INCREMENT PRIMARY KEY,
+    EmployeeID INT NOT NULL,
+    OvertimeDate DATE NOT NULL,
+    HoursWorked DECIMAL(5, 2) NOT NULL,
+    Rate DECIMAL(5, 2) NOT NULL DEFAULT 1.25,
+    Status ENUM('Pending', 'Approved', 'Rejected') NOT NULL DEFAULT 'Pending',
+    Reason VARCHAR(255),
+    FOREIGN KEY (EmployeeID) REFERENCES Employees(EmployeeID)
+);
+
+-- Create indexes for better performance
+CREATE INDEX idx_employee_name ON Employees(Name);
+CREATE INDEX idx_payroll_period ON Payroll(PayPeriodStart, PayPeriodEnd);
+CREATE INDEX idx_attendance_date ON Attendance(AttendanceDate);
+CREATE INDEX idx_leaves_dates ON Leaves(StartDate, EndDate);
+
+-- Sample stored procedure for calculating payroll
+DELIMITER //
+CREATE PROCEDURE CalculatePayroll(IN employeeID INT, IN periodStart DATE, IN periodEnd DATE)
+BEGIN
+    DECLARE baseSalary DECIMAL(12, 2);
+    DECLARE totalDeductions DECIMAL(12, 2);
+    DECLARE totalOvertime DECIMAL(12, 2);
+    DECLARE grossPay DECIMAL(12, 2);
+    DECLARE netPay DECIMAL(12, 2);
+    DECLARE payrollID INT;
+    
+    -- Get employee's base salary
+    SELECT BasicSalary INTO baseSalary FROM Employees WHERE EmployeeID = employeeID;
+    
+    -- Calculate overtime pay for the period
+    SELECT COALESCE(SUM(HoursWorked * Rate * (baseSalary / 22 / 8)), 0) INTO totalOvertime
+    FROM Overtime 
+    WHERE EmployeeID = employeeID 
+      AND OvertimeDate BETWEEN periodStart AND periodEnd
+      AND Status = 'Approved';
+    
+    -- Calculate gross pay (basic salary + overtime)
+    SET grossPay = baseSalary + totalOvertime;
+    
+    -- Insert into payroll table
+    INSERT INTO Payroll (EmployeeID, PayPeriodStart, PayPeriodEnd, GrossPay, TotalDeductions, NetPay, PaymentDate)
+    VALUES (employeeID, periodStart, periodEnd, grossPay, 0, grossPay, DATE_ADD(periodEnd, INTERVAL 5 DAY));
+    
+    SET payrollID = LAST_INSERT_ID();
+    
+    -- Calculate and insert mandatory deductions (just examples, actual calculations would vary)
+    -- SSS Contribution (simplified example)
+    INSERT INTO Deductions (PayrollID, DeductionType, Amount, Description)
+    VALUES (payrollID, 'SSS', grossPay * 0.0363, 'SSS Contribution');
+    
+    -- PhilHealth Contribution (simplified example)
+    INSERT INTO Deductions (PayrollID, DeductionType, Amount, Description)
+    VALUES (payrollID, 'PhilHealth', grossPay * 0.03, 'PhilHealth Contribution');
+    
+    -- HDMF Contribution (simplified example)
+    INSERT INTO Deductions (PayrollID, DeductionType, Amount, Description)
+    VALUES (payrollID, 'HDMF', 100, 'Pag-IBIG Contribution');
+    
+    -- Tax Calculation (simplified example)
+    INSERT INTO Deductions (PayrollID, DeductionType, Amount, Description)
+    VALUES (payrollID, 'Tax', grossPay * 0.1, 'Withholding Tax');
+    
+    -- Calculate total deductions
+    SELECT SUM(Amount) INTO totalDeductions FROM Deductions WHERE PayrollID = payrollID;
+    
+    -- Update net pay and total deductions
+    UPDATE Payroll SET TotalDeductions = totalDeductions, NetPay = grossPay - totalDeductions
+    WHERE PayrollID = payrollID;
+END //
+DELIMITER ;
+
+-- Sample trigger to update attendance status based on time in
+DELIMITER //
+CREATE TRIGGER UpdateAttendanceStatus
+BEFORE INSERT ON Attendance
+FOR EACH ROW
+BEGIN
+    -- If employee clocks in after 9:00 AM, mark as late
+    IF NEW.TimeIn > '09:00:00' THEN
+        SET NEW.Status = 'Late';
+    ELSE
+        SET NEW.Status = 'Present';
+    END IF;
+END //
+DELIMITER ;
+
+-- Sample view for employee complete information
+CREATE VIEW EmployeeCompleteInfo AS
+SELECT 
+    e.EmployeeID,
+    e.Name,
+    e.Position,
+    e.DateHired,
+    e.EmploymentStatus,
+    e.BasicSalary,
+    e.ContactNumber,
+    e.MaritalStatus,
+    f.SpouseName,
+    COUNT(DISTINCT d.DependentID) AS NumberOfDependents,
+    e.SSS_Number,
+    e.HDMF_Number,
+    e.TIN_Number,
+    e.PhilHealth_Number
+FROM 
+    Employees e
+LEFT JOIN 
+    FamilyInfo f ON e.EmployeeID = f.EmployeeID
+LEFT JOIN 
+    Dependents d ON e.EmployeeID = d.EmployeeID
+GROUP BY 
+    e.EmployeeID;
